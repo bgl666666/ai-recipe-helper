@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 食谱小助手</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #faf7f2; color: #333; line-height: 1.6; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 16px 14px 60px; }
+  header { text-align: center; padding: 18px 0 6px; }
+  header h1 { font-size: 26px; color: #c0392b; }
+  header p { color: #888; font-size: 14px; margin-top: 4px; }
+  .card { background: #fff; border-radius: 12px; padding: 16px; margin-top: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .card h2 { font-size: 17px; margin-bottom: 10px; }
+  .hint { color: #888; font-size: 13px; margin-top: 8px; }
+  .row { display: flex; gap: 8px; }
+  #ingInput { flex: 1; padding: 10px 12px; font-size: 16px; border: 1.5px solid #e0d8cf; border-radius: 8px; outline: none; }
+  #ingInput:focus { border-color: #e67e22; }
+  button { border: none; border-radius: 8px; cursor: pointer; font-size: 15px; }
+  #addBtn { background: #e67e22; color: #fff; padding: 0 18px; }
+  #addBtn:active { background: #cf6d17; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip { background: #fdf2e9; color: #a04000; border: 1px solid #f5cba7; padding: 4px 10px; border-radius: 16px; font-size: 13px; cursor: pointer; }
+  .chip:hover { background: #fdebd0; }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; min-height: 28px; }
+  .tag { background: #e67e22; color: #fff; padding: 5px 8px 5px 12px; border-radius: 16px; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
+  .tag button { background: transparent; color: #fff; font-size: 15px; padding: 0 2px; }
+  .empty { color: #999; font-size: 14px; padding: 6px 0; }
+  #recommendBtn { flex: 1; background: #c0392b; color: #fff; padding: 12px; font-size: 16px; }
+  #recommendBtn:active { background: #a93226; }
+  #aiBtn { flex: 1; background: #8e44ad; color: #fff; padding: 12px; font-size: 16px; }
+  #aiBtn:active { background: #7d3c98; }
+  #aiBtn:disabled { background: #bbb; }
+  .recipe { border: 1px solid #eee; border-radius: 10px; padding: 12px 14px; margin-top: 10px; }
+  .recipe.sel { border-color: #e67e22; background: #fef9f3; }
+  .recipe h3 { font-size: 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .pct { color: #c0392b; font-size: 15px; white-space: nowrap; }
+  .meta { color: #888; font-size: 13px; margin-top: 2px; }
+  .ings { font-size: 14px; margin-top: 8px; }
+  .have { color: #27ae60; }
+  .miss { color: #e67e22; }
+  .steps { margin: 8px 0 0 18px; font-size: 14px; color: #555; display: none; }
+  .steps.open { display: block; }
+  .steps li { margin-top: 3px; }
+  .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .actions button { flex: 1; padding: 8px; font-size: 14px; background: #f4f4f4; color: #333; }
+  .actions button.on { background: #e67e22; color: #fff; }
+  .actions .detailBtn { background: #fdf2e9; color: #a04000; }
+  #shopList { white-space: pre-line; font-size: 15px; background: #fef9f3; border: 1px dashed #f5cba7; border-radius: 8px; padding: 12px; margin-top: 10px; }
+  #copyBtn { width: 100%; background: #27ae60; color: #fff; padding: 10px; margin-top: 10px; }
+  .cfg label { display: block; font-size: 14px; margin-top: 10px; color: #555; }
+  .cfg input { width: 100%; padding: 9px 10px; font-size: 15px; border: 1.5px solid #e0d8cf; border-radius: 8px; margin-top: 4px; outline: none; }
+  .cfg input:focus { border-color: #8e44ad; }
+  #saveCfg { background: #8e44ad; color: #fff; padding: 10px 18px; margin-top: 12px; }
+  #clearCfg { background: #f4f4f4; color: #333; padding: 10px 18px; margin-top: 12px; }
+  .foot { text-align: center; color: #aaa; font-size: 12px; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>🍳 AI 食谱小助手</h1><p>输入手头食材，按匹配度推荐家常菜，一键生成购物清单</p></header>
+
+  <details class="card cfg" id="settingsCard">
+    <summary style="cursor:pointer"><h2 style="display:inline">⚙️ 大模型设置（可选）</h2></summary>
+    <p class="hint">填入你自己的大模型 API 信息后，“AI 生成菜谱”会调用模型实时生成菜谱；不填也能用本地菜谱库。密钥只保存在本浏览器 localStorage，不会上传到任何服务器，也不会进代码仓库。</p>
+    <label>API Base URL<input id="cfgBase" placeholder="https://api.deepseek.com/v1"></label>
+    <label>API Key<input id="cfgKey" type="password" placeholder="sk-...（只保存在本浏览器）"></label>
+    <label>模型名<input id="cfgModel" placeholder="deepseek-chat"></label>
+    <div class="row">
+      <button id="saveCfg">保存设置</button>
+      <button id="clearCfg">清除密钥</button>
+    </div>
+    <p id="cfgStatus" class="hint"></p>
+  </details>
+
+  <div class="card">
+    <h2>我有什么食材</h2>
+    <div class="row">
+      <input id="ingInput" placeholder="输入一种食材，如：西红柿" autocomplete="off">
+      <button id="addBtn">添加</button>
+    </div>
+    <div class="chips" id="quickChips"></div>
+    <div class="tags" id="myIngs"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="recommendBtn">🔍 本地推荐</button>
+      <button id="aiBtn">✨ AI 生成菜谱</button>
+    </div>
+    <p id="modeLine" class="hint"></p>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <h2>推荐菜谱 <span id="resultCount" style="color:#888;font-size:13px;font-weight:400"></span></h2>
+    <div id="results"></div>
+  </div>
+
+  <div class="card" id="shopCard" style="display:none">
+    <h2>🛒 购物清单</h2>
+    <div id="shopList"></div>
+    <button id="copyBtn">复制购物清单</button>
+  </div>
+
+  <p class="foot">本地菜谱库 25 道家常菜 · 离线可用 · 不收集任何数据</p>
+</div>
+
+<script>
+const QUICK = ['鸡蛋','西红柿','土豆','鸡肉','猪肉','豆腐','青椒','洋葱','大蒜','生姜','大葱','米饭','面条','白菜','胡萝卜','牛肉','虾','蘑菇','茄子','黄瓜'];
+const RECIPES = [
+{name:'西红柿炒鸡蛋',time:10,ings:[['西红柿','2个'],['鸡蛋','3个'],['大葱','1段'],['白糖','1小勺'],['盐','适量']],steps:['西红柿切块，鸡蛋打散加少许盐。','热油滑炒鸡蛋至凝固，盛出。','下西红柿翻炒出汁，加糖提鲜。','倒回鸡蛋，大火快炒，加盐出锅。']},
+{name:'土豆丝炒肉',time:15,ings:[['土豆','2个'],['猪肉','100克'],['青椒','1个'],['大蒜','2瓣']],steps:['土豆切细丝泡水去淀粉，猪肉切丝腌一下。','热油爆香蒜末，下肉丝炒至变色。','下土豆丝大火快炒 2 分钟。','加青椒丝、盐调味，炒匀出锅。']},
+{name:'麻婆豆腐',time:15,ings:[['豆腐','1块'],['猪肉末','80克'],['大葱','1段'],['大蒜','2瓣'],['干辣椒','2个'],['花椒','1小把']],steps:['豆腐切块焯水去豆腥，捞出备用。','热油下肉末炒散，加葱蒜、干辣椒、花椒爆香。','加豆瓣酱炒出红油，倒豆腐轻轻翻炒。','加水小火焖 2 分钟，勾芡收汁。']},
+{name:'青椒炒肉丝',time:12,ings:[['青椒','3个'],['猪肉','150克'],['大蒜','2瓣'],['生姜','1小块']],steps:['猪肉切丝，加料酒、生抽、淀粉抓匀。','热油下肉丝炒至变色盛出。','爆香姜蒜，下青椒炒断生。','倒回肉丝，加盐快炒匀出锅。']},
+{name:'蒜蓉西兰花',time:10,ings:[['西兰花','1颗'],['大蒜','4瓣']],steps:['西兰花切小朵，焯水 1 分钟捞出。','热油爆香蒜末。','下西兰花大火翻炒。','加盐调味，出锅。']},
+{name:'白菜炖豆腐',time:20,ings:[['白菜','半颗'],['豆腐','1块'],['大葱','1段'],['生姜','1小块']],steps:['白菜切段，豆腐切块。','热油爆香葱姜，下白菜翻炒。','加水、豆腐，小火炖 10 分钟。','加盐调味，出锅。']},
+{name:'胡萝卜炒鸡蛋',time:10,ings:[['胡萝卜','1根'],['鸡蛋','2个'],['大葱','1段']],steps:['胡萝卜切丝，鸡蛋打散。','热油炒鸡蛋至凝固盛出。','下胡萝卜丝炒软。','倒回鸡蛋，加盐炒匀。']},
+{name:'洋葱炒牛肉',time:15,ings:[['洋葱','1个'],['牛肉','150克'],['青椒','1个'],['大蒜','2瓣']],steps:['牛肉切片，加生抽、淀粉腌 10 分钟。','热油大火炒牛肉至变色盛出。','爆香蒜末，下洋葱、青椒炒软。','倒回牛肉，加盐快炒出锅。']},
+{name:'虾仁炒蛋',time:10,ings:[['虾','150克'],['鸡蛋','3个'],['大葱','1段']],steps:['虾去壳去虾线，加料酒腌一下。','鸡蛋打散，热油滑炒至凝固盛出。','下虾仁炒至变色。','倒回鸡蛋，加盐、葱花炒匀。']},
+{name:'茄子烧肉',time:25,ings:[['茄子','2根'],['猪肉','150克'],['大蒜','3瓣'],['大葱','1段'],['生姜','1小块']],steps:['茄子切滚刀块，猪肉切片。','热油先把茄子煎软盛出。','爆香葱姜蒜，下肉片炒变色。','倒回茄子，加生抽、少许水焖 5 分钟收汁。']},
+{name:'黄瓜炒鸡蛋',time:10,ings:[['黄瓜','1根'],['鸡蛋','2个'],['大蒜','2瓣']],steps:['黄瓜切片，鸡蛋打散。','热油炒鸡蛋盛出。','爆香蒜末，下黄瓜快炒。','倒回鸡蛋，加盐出锅。']},
+{name:'蘑菇炒青菜',time:10,ings:[['蘑菇','150克'],['青菜','200克'],['大蒜','2瓣']],steps:['蘑菇切片，青菜洗净。','热油爆香蒜末，下蘑菇炒软。','下青菜大火翻炒。','加盐调味出锅。']},
+{name:'番茄鸡蛋面',time:15,ings:[['西红柿','2个'],['鸡蛋','2个'],['面条','150克'],['大葱','1段']],steps:['面条煮熟捞出过凉水。','西红柿炒鸡蛋做浇头。','浇头盖在面上，撒葱花。','拌匀即可吃。']},
+{name:'扬州炒饭',time:15,ings:[['米饭','1大碗'],['鸡蛋','2个'],['胡萝卜','半根'],['大葱','1段'],['火腿','50克']],steps:['鸡蛋炒散盛出，胡萝卜、火腿切丁。','热油下胡萝卜丁、火腿丁翻炒。','下米饭炒散，加鸡蛋。','加盐、生抽调味，撒葱花出锅。']},
+{name:'土豆炖牛肉',time:40,ings:[['土豆','2个'],['牛肉','300克'],['胡萝卜','1根'],['洋葱','半个'],['生姜','1小块']],steps:['牛肉切块焯水去沫。','热油爆香姜片，下牛肉翻炒。','加水、生抽，小火炖 25 分钟。','下土豆、胡萝卜、洋葱，再炖 10 分钟收汁。']},
+{name:'清蒸鲈鱼',time:20,ings:[['鲈鱼','1条'],['生姜','1小块'],['大葱','2段']],steps:['鲈鱼去鳞去内脏，两面划刀。','鱼身放姜丝葱段，水开上锅蒸 8 分钟。','倒掉盘中腥水，换新鲜葱丝。','淋热油、生抽即可。']},
+{name:'可乐鸡翅',time:25,ings:[['鸡翅','8个'],['可乐','1罐'],['生姜','1小块'],['大葱','1段']],steps:['鸡翅划两刀，焯水去沫。','热油下鸡翅煎至两面金黄。','倒可乐没过鸡翅，加姜葱。','小火炖 15 分钟，大火收汁。']},
+{name:'宫保鸡丁',time:15,ings:[['鸡肉','200克'],['花生','1小把'],['青椒','1个'],['大葱','1段'],['大蒜','2瓣'],['干辣椒','3个']],steps:['鸡肉切丁，加料酒、生抽、淀粉抓匀。','热油下鸡丁炒变色盛出。','爆香葱蒜、干辣椒，下青椒、花生。','倒回鸡丁，加糖、醋调味快炒。']},
+{name:'地三鲜',time:15,ings:[['土豆','1个'],['茄子','1根'],['青椒','1个'],['大蒜','2瓣']],steps:['土豆、茄子、青椒切块，茄子先煎软。','热油下土豆煎至微黄。','下青椒、茄子，加生抽翻炒。','爆香蒜末，加盐出锅。']},
+{name:'西红柿炖牛腩',time:60,ings:[['西红柿','3个'],['牛肉','300克'],['胡萝卜','1根'],['洋葱','半个']],steps:['牛腩切块焯水。','西红柿切块炒出红汁。','下牛腩、胡萝卜、洋葱，加水炖 50 分钟。','加盐调味，收汁出锅。']},
+{name:'蒜蓉空心菜',time:8,ings:[['空心菜','200克'],['大蒜','4瓣'],['干辣椒','1个']],steps:['空心菜洗净切段。','热油爆香蒜末、干辣椒。','下空心菜大火快炒。','加盐出锅。']},
+{name:'香菇滑鸡',time:20,ings:[['蘑菇','100克'],['鸡肉','200克'],['生姜','1小块'],['大葱','1段']],steps:['鸡肉切块，加生抽、淀粉腌 10 分钟。','香菇切片焯水。','热油爆香姜葱，下鸡块炒变色。','下香菇，加水焖 5 分钟收汁。']},
+{name:'韭菜炒鸡蛋',time:8,ings:[['韭菜','150克'],['鸡蛋','2个']],steps:['韭菜切段，鸡蛋打散。','热油炒鸡蛋至凝固盛出。','下韭菜快炒 30 秒。','倒回鸡蛋，加盐出锅。']},
+{name:'酸辣土豆丝',time:12,ings:[['土豆','2个'],['青椒','1个'],['醋','1勺'],['干辣椒','2个']],steps:['土豆切细丝泡水。','热油爆香干辣椒。','下土豆丝大火快炒 2 分钟。','加青椒、醋、盐，炒匀出锅。']},
+{name:'紫菜蛋花汤',time:8,ings:[['紫菜','1小把'],['鸡蛋','1个'],['大葱','1段'],['香油','几滴']],steps:['紫菜撕碎泡开，鸡蛋打散。','水烧开下紫菜。','淋入蛋液成蛋花。','加盐、葱花、香油出锅。']},
+];
+let myIngs = [];
+let selected = new Set();
+let currentList = [];
+const $ = s => document.querySelector(s);
+
+// ---------- 大模型设置（只存 localStorage） ----------
+const SETTINGS_KEY = 'ai-recipe-helper-settings';
+function loadSettings() { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; } }
+function refreshCfgUI() {
+  const s = loadSettings();
+  $('#cfgBase').value = s.baseUrl || '';
+  $('#cfgKey').value = s.apiKey || '';
+  $('#cfgModel').value = s.model || '';
+  $('#cfgStatus').textContent = s.apiKey ? ('已配置：' + (s.model || 'deepseek-chat') + '（密钥只存在本浏览器）') : '未配置 API Key：只能用本地菜谱库。';
+}
+$('#saveCfg').onclick = () => {
+  const s = { baseUrl: $('#cfgBase').value.trim(), apiKey: $('#cfgKey').value.trim(), model: $('#cfgModel').value.trim() };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  refreshCfgUI();
+  alert('设置已保存（只存在本浏览器）。');
+};
+$('#clearCfg').onclick = () => {
+  localStorage.removeItem(SETTINGS_KEY);
+  refreshCfgUI();
+  alert('密钥已清除。');
+};
+
+// ---------- 食材 ----------
+function renderQuick() {
+  $('#quickChips').innerHTML = QUICK.map(q => `<span class="chip" data-q="${q}">+ ${q}</span>`).join('');
+  document.querySelectorAll('#quickChips .chip').forEach(c => c.onclick = () => addIng(c.dataset.q));
+}
+function renderMine() {
+  const box = $('#myIngs');
+  box.innerHTML = myIngs.length ? myIngs.map((g, i) => `<span class="tag">${g}<button data-i="${i}" aria-label="删除">×</button></span>`).join('') : '<span class="empty">还没有食材，点上方快捷按钮或输入添加</span>';
+  box.querySelectorAll('button').forEach(b => b.onclick = () => { myIngs.splice(+b.dataset.i, 1); renderMine(); });
+}
+function norm(s) { return s.trim().replace(/[\s,，、]+/g, ''); }
+function addIng(v) {
+  v = norm(v);
+  if (!v) return;
+  if (!myIngs.includes(v)) myIngs.push(v);
+  $('#ingInput').value = '';
+  renderMine();
+}
+$('#addBtn').onclick = () => addIng($('#ingInput').value);
+$('#ingInput').addEventListener('keydown', e => { if (e.key === 'Enter') addIng(e.target.value); });
+
+// ---------- 匹配与渲染（本地 / AI 两路共用） ----------
+function calcMatch(ings) {
+  const have = ings.filter(it => myIngs.some(m => it.name.includes(m) || m.includes(it.name)));
+  const miss = ings.filter(it => !have.includes(it));
+  return { pct: ings.length ? Math.round(have.length / ings.length * 100) : 0, have: have.map(i => i.name), miss };
+}
+function renderResults(list, modeLabel) {
+  currentList = list;
+  selected = new Set();
+  $('#resultCard').style.display = 'block';
+  $('#resultCount').textContent = modeLabel + ' · 共 ' + list.length + ' 道';
+  $('#results').innerHTML = list.length ? list.map((r, i) => `
+    <div class="recipe" data-i="${i}">
+      <h3>${r.name}<span class="pct">${r.match}% 匹配</span></h3>
+      <div class="meta">⏱ ${r.time} 分钟 · ${r.ings.length} 种食材</div>
+      <div class="ings">✅ 已有：<span class="have">${r.have.join('、') || '无'}</span><br>🛒 缺少：<span class="miss">${r.miss.map(x => x.name + (x.amount || '')).join('、') || '无，齐了！'}</span></div>
+      <ol class="steps" id="steps-${i}">${r.steps.map(s => `<li>${s}</li>`).join('')}</ol>
+      <div class="actions">
+        <button class="detailBtn" data-i="${i}">看做法</button>
+        <button class="selBtn" data-i="${i}">选入购物清单</button>
+      </div>
+    </div>`).join('') : '<p class="empty">没有能做的菜，换几个食材试试。</p>';
+  document.querySelectorAll('.detailBtn').forEach(b => b.onclick = () => {
+    const s = document.querySelector('#steps-' + b.dataset.i);
+    s.classList.toggle('open');
+    b.textContent = s.classList.contains('open') ? '收起做法' : '看做法';
+  });
+  document.querySelectorAll('.selBtn').forEach(b => b.onclick = () => {
+    const i = +b.dataset.i;
+    if (selected.has(i)) { selected.delete(i); b.classList.remove('on'); b.textContent = '选入购物清单'; }
+    else { selected.add(i); b.classList.add('on'); b.textContent = '✓ 已选入购物清单'; }
+    document.querySelectorAll('.recipe')[i].classList.toggle('sel', selected.has(i));
+    renderShop();
+  });
+  renderShop();
+}
+function renderShop() {
+  const card = $('#shopCard');
+  if (!selected.size) { card.style.display = 'none'; return; }
+  const items = new Map();
+  selected.forEach(i => {
+    currentList[i].miss.forEach(x => items.set(x.name, (items.get(x.name) || '') + (items.get(x.name) ? '+' : '') + (x.amount || '')));
+  });
+  const names = [...selected].map(i => currentList[i].name).join('、');
+  $('#shopList').textContent = `为「${names}」需要购买：\n` + [...items.entries()].map(([n, a]) => `· ${n} ${a}`).join('\n');
+  card.style.display = 'block';
+}
+$('#copyBtn').onclick = () => {
+  const t = $('#shopList').textContent;
+  if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => alert('已复制购物清单')).catch(() => alert('复制失败，请手动选择复制'));
+  else alert('请手动选择复制');
+};
+
+// ---------- 本地推荐（离线 fallback） ----------
+function recommend() {
+  if (!myIngs.length) { alert('请先添加食材'); return; }
+  const list = RECIPES.map(r => {
+    const ings = r.ings.map(([name, amount]) => ({ name, amount }));
+    const m = calcMatch(ings);
+    return { name: r.name, time: r.time, ings, steps: r.steps, match: m.pct, have: m.have, miss: m.miss };
+  }).filter(x => x.match > 0).sort((a, b) => b.match - a.match || a.miss.length - b.miss.length);
+  $('#modeLine').textContent = '当前：本地菜谱库（离线）';
+  renderResults(list, '本地菜谱库');
+}
+$('#recommendBtn').onclick = recommend;
+
+// ---------- AI 生成菜谱（OpenAI 兼容接口） ----------
+async function aiRecommend() {
+  if (!myIngs.length) { alert('请先添加食材'); return; }
+  const s = loadSettings();
+  if (!s.apiKey) {
+    alert('请先在“大模型设置”里填 API Key（只保存在本浏览器）。');
+    document.getElementById('settingsCard').open = true;
+    return;
+  }
+  const baseUrl = (s.baseUrl || 'https://api.deepseek.com/v1').replace(/\/$/, '');
+  const model = s.model || 'deepseek-chat';
+  const btn = $('#aiBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ AI 生成中…';
+  $('#modeLine').textContent = '正在调用大模型（' + model + '）…';
+  const sysPrompt = '你是一位家常菜谱助手。用户给出已有食材，请推荐 3-5 道最适合的家常菜。只返回 JSON，不要任何其他文字。格式：{"recipes":[{"name":"菜名","time":分钟数,"ingredients":[{"name":"食材名","amount":"用量"}],"steps":["步骤1","步骤2"]}]}。菜谱必须是家常菜，食材尽量用用户已有的，每道菜缺少的不超过 3 种。';
+  const userMsg = '我有的食材：' + myIngs.join('、') + '。请推荐 3-5 道家常菜。';
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30000);
+    const resp = await fetch(baseUrl + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.apiKey },
+      body: JSON.stringify({ model, messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: userMsg }], temperature: 0.7, response_format: { type: 'json_object' } }),
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    if (!resp.ok) throw new Error('接口返回 HTTP ' + resp.status);
+    const data = await resp.json();
+    let text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(text);
+    const arr = parsed.recipes || [];
+    if (!arr.length) throw new Error('模型未返回菜谱');
+    const list = arr.map(r => {
+      const ings = (r.ingredients || []).map(x => typeof x === 'string' ? { name: x, amount: '' } : { name: x.name || '', amount: x.amount || '' }).filter(x => x.name);
+      const m = calcMatch(ings);
+      return { name: r.name || '未命名', time: r.time || 15, ings, steps: r.steps || [], match: m.pct, have: m.have, miss: m.miss };
+    }).sort((a, b) => b.match - a.match);
+    $('#modeLine').textContent = '当前：AI 生成（' + model + '）';
+    renderResults(list, 'AI 生成');
+  } catch (e) {
+    $('#modeLine').textContent = 'AI 调用失败（' + e.message + '），已回退到本地菜谱库。';
+    recommend();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ AI 生成菜谱';
+  }
+}
+$('#aiBtn').onclick = aiRecommend;
+
+renderQuick();
+renderMine();
+refreshCfgUI();
+</script>
+</body>
+</html>
